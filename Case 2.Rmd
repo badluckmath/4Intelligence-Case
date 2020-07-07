@@ -1,0 +1,268 @@
+---
+title: "Case 2"
+author: "Matheus Barreto Alves de Almeida"
+date: "07/07/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+Primeiramente, vamos iniciar a bibliotecas imoportantes
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(plotly)
+library(purrr)
+library(cluster)
+library(forecast)
+library(fpp2)
+library(lattice)
+```
+```{r}
+
+```
+
+Para responder cada questão, será criado dataframes que serão nomeados por "dfi" onde i é o numero da questão.
+
+Lendo os dataframes
+
+```{r}
+comex <- read.csv('data_comexstat.csv')
+covar <- read_xlsx('covariates.xlsx')
+
+```
+
+```{r}
+head(comex)
+```
+
+É visivel que existem varíaveis que precisam ser categorizadas:
+
+```{r}
+comex$state <- factor(comex$state)
+comex$product <- factor(comex$product)
+comex$country <- factor(comex$country)
+comex$route <- factor(comex$route)
+comex$type <- factor(comex$type)
+```
+
+Além disso, precisamos transformar a coluna "date" para o formato Date:
+
+```{r}
+comex$date <- as.Date(comex$date)
+
+```
+
+Para respondera a primeira questão, vou fazer o uso de duas novas colunas : month e year, que irá usar a coluna "date" para extrair o mês e o ano.
+```{r}
+comex <- comex %>% mutate(month = format(date,"%m"), year = format(date,"%Y")) #Esse código pega os elemetnos de date e mostra qual é o mês e o ano da observação
+
+```
+
+Nosso primeiro dataframe irá mostrar a evolução anual da exportação de todo o periodo para os três produtos pedidos ( total em toneladas ):
+```{r}
+df <- comex %>% filter(type== "Export",) %>% group_by(year,product) %>%
+  filter(product %in% c('soybeans','soybean_oil','soybean_meal'))  %>% summarize(total = sum(tons))
+df$year <- as.numeric(df$year)
+head(df)
+```
+
+Vamos visualizar melhor usando ggplot:
+
+```{r}
+df %>% group_by(product) %>% ggplot(aes(year,total,color=product))+geom_line()
+```
+
+Para responder a segunda pergunta, precisamos criar um dataframe que agora, irá pegar apenas as observações a partir de 2014
+
+```{r}
+df2 <- comex %>% filter(type == "Export") %>%  
+  filter(date >= "2014-01-01") %>% group_by(product) %>% summarize(total = sum(usd))
+head(df2)
+```
+Agora, vamos criar gráfico para visualizar melhor o que está acontecendo:
+
+```{r}
+ ggplot(df2,aes(x=factor(product),y= total))+ geom_col(fill = "red")+xlab("Product") + ylab("Total in USD")
+```
+
+A partir deste gráfico, podemos ver que o produtos indicados pelo código 'soybeans','soybean_meal' e 'sugar' são os produtos mais importantes em termos de valor em USD.
+
+
+Na terceira pergunta, utilizou-se o mesmo periodo, filtrando-se apenas o produto pedido:
+
+```{r}
+df3 <- comex %>% filter(type == "Export") %>%filter(date >= "2014-01-01" & product == "corn")
+head(df3)
+```
+
+Para visualizas as rotas mais usadas, vamos utilizar um gráfico de barras:
+```{r}
+-barplot(table(df3$route), main = "Corn Routes",ylab = "Frequency",col = 'darkblue')
+```
+
+Fica evidente que a rota mais usada é a marítima. Isso também se repete para os outros produtos:
+
+```{r}
+with(comex,histogram(~route |product))
+```
+
+Agora, vamos verificar os parceiros mais importantes do Brasil nos ultimos 3 anos, respondendo a questão 4. Aqui, considera-se os parceiros mais importantes aqueles com o qual o Brasil importou e exportou mais.
+
+```{r}
+df4 <- comex  %>%filter(date >= "2017-01-01" & product %in% c("corn",'sugar'))
+head(df4)
+```
+
+É util utilizar a função top_n do dplyr, que verifica os n primeiros elementos com a maior contagem. Para o nosso caso, o número de contagens é o número de trades efetuados.
+
+```{r}
+top6parceiros <- df4 %>% count(country,sort = TRUE)  %>% top_n(6)
+head(top6parceiros)
+
+```
+
+Vamos visualizar esses parceiros lado a lado:
+```{r}
+ggplot(top6parceiros,aes(country,n))+ geom_col(fill="darkred") + xlab("Country")+ ylab("Trades") +labs(title = "Top 6 partners in  the last 3 years")
+
+```
+
+Com a mesma função, podemos verificar os top 5 estados mais importantes em termos de exportação, levando em conta cada produto.
+```{r}
+df5 <-  comex %>% group_by(product) %>% count(state) %>% top_n(5)
+head(df5)
+
+```
+
+```{r}
+ggplot(df5,aes(n,product,fill = state))+ geom_col() + ylab('Product') + xlab("Trades")
+
+```
+
+
+Aqui, cada estado e representado por uma cor. O preenchimento da cor indica a contribuicao daquele estado.
+
+
+Podemos agora tentar prever como sera a quantidade de toneladas da exportacao de Soybean, Corn e Soybean Meal usando o mesmo processo do Case 1.
+
+```{r}
+df6 <- comex %>% filter(type== "Export",) %>% group_by(year,product) %>%
+  filter(product %in% c('soybeans','corn','soybean_meal'))  %>% summarize(total = sum(tons))
+df6$year <- as.numeric(df6$year)
+head(df6)
+```
+
+Vamos visualizar a serie temporal dos dados:
+
+```{r}
+df6 %>% group_by(product) %>% ggplot(aes(year,total,color=product))+geom_line()
+```
+
+Fazendo os subsets dos produtos:
+```{r}
+soybean <- df6%>% filter(product=="soybeans")
+soybean_meal <- df6 %>% filter(product=="soybean_meal")
+corn <- df6 %>% filter(product=="corn")
+```
+
+
+Transformando os subsets and time series:
+```{r}
+corn <- ts(corn[,3],start= 1997)
+soybean <- ts(soybean[,3],start = 1997)
+soybean_meal <- ts(soybean_meal[,3],start = 1997)
+```
+
+Aplicando forecast para cada um dos produtos:
+
+
+```{r}
+f.corn <- forecast(corn, h = 11)
+f.soybean <- forecast(soybean, h = 11)
+f.soybean_meal <- forecast(soybean_meal, h = 11)
+```
+
+Por fim, podemos ver uma previsao para os proximos 11 anos:
+
+```{r}
+plot(f.corn, main = 'Corn  11 Years Forecast')
+plot(f.soybean, main = 'Soybean  11 Years Forecast')
+plot(f.soybean_meal, main = 'Soybean Meal  11 Years Forecast')
+```
+
+
+Existem outras variaveis que sao importantes e devem ser analisadas, uma vez que a quantidade de exportacao depende tambem de outros fatores, como GDP Mundial e claro, o preco. Para isso, vamos analisar o comportamento da exportacao em relacao a essas variaveis.
+
+```{r}
+cov1 <- covar %>% filter(year >= 1997)
+head(cov1)
+```
+Vamos visualizar agora a evolucao temporal do preco dos produtos
+```{r}
+par(mfrow= c(1,3))
+with(cov1,plot(year,price_soybeans,type = 'l',xlab = 'Year',ylab= 'Price'))
+title(main = "Soybean Price over the Years")
+with(cov1,plot(year,price_soybean_meal,type = 'l',xlab = 'Year',ylab= 'Price'))
+title(main = "Soybean Meal Price over the Years")
+with(cov1,plot(year,price_corn,type = 'l',xlab = 'Year',ylab= 'Price'))
+title(main = "Corn Price over the Years")
+```
+
+Os produtos possuem graficos parecidos. Portanto, em primeiro momento, dizer que suas variaveis correlatadas sao as mesmas.
+
+Agora, vamos separar os produtos em subsets:
+```{r}
+soybean <- df6%>% filter(product=="soybeans")
+soybean_meal <- df6 %>% filter(product=="soybean_meal")
+corn <- df6 %>% filter(product=="corn")
+head(soybean)
+```
+
+uma vez que os dados foram separados, vamos junta-los a tabela cov1:
+
+```{r}
+covcorn <-  corn  %>% inner_join(cov1, by = "year", suffix = c("_comex","_cov"))
+covsoybean <- soybean %>% inner_join(cov1, by = "year", suffix = c("_comex","_cov"))
+covsoybean_meal <- covsoybean <- soybean_meal %>% inner_join(cov1, by = "year", suffix = c("_comex","_cov"))
+
+head(covsoybean)
+
+```
+
+Agora que cada subset possui uma correspondencia com a tabela cov1, podemos fazer as analises com linhas de regressao. Vamos avaliar a correspondencia entra a quantidade de exportacao em toneladas com o GDP mundial e o preco de cada produto:
+
+```{r}
+par(mfrow = c(1,3))
+#Corn
+with(covcorn,plot(price_corn,total, xlab ="Corn Price", ylab = "Total in Tons"))
+abline(lm(covcorn$total ~ covcorn$price_corn))
+
+#Soybean Meal
+with(covsoybean_meal,plot(price_soybean_meal,total))
+abline(lm(covsoybean_meal$total ~ covsoybean_meal$price_corn, xlab ="Soybean Meal Price", ylab = "Total in Tons"))
+#Soybeans
+with(covsoybean,plot(price_soybeans,total, xlab ="Soybean Price", ylab = "Total in Tons"))
+abline(lm(covsoybean$total ~ covsoybean$price_corn))
+
+
+```
+
+para o GDP global:
+
+```{r}
+par(mfrow = c(1,3))
+#Corn
+with(covcorn,plot(gdp_world,total, xlab= "World GDP",ylab = "Total in Tons"))
+abline(lm(covcorn$total ~ covcorn$gdp_world))
+#Soybeans
+with(covsoybean,plot(price_soybeans,total, xlab= "World GDP",ylab = "Total in Tons"))
+abline(lm(covsoybean$total ~ covsoybean$gdp_world))
+#Soybean Meal
+with(covsoybean_meal,plot(gdp_world,total, xlab= "World GDP",ylab = "Total in Tons"))
+abline(lm(covsoybean_meal$total ~ covsoybean_meal$gdp_world))
+```
+
+
+Todas as projecoes indicam o crescimento da exportacao.
