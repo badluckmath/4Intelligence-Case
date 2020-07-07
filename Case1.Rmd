@@ -1,0 +1,110 @@
+---
+title: "Case 1"
+author: "Matheus Barreto Alves de Almeida"
+date: "07/07/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Primeiramente, vamos iniciar a bibliotecas imoportantes
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(plotly)
+library(purrr)
+library(cluster)
+library(forecast)
+library(fpp2)
+```
+
+
+Carregando e  visualizando o arquivo.
+
+```{r}
+df <- read.csv('TFP.csv')
+head(df)
+```
+
+Transformando a variável isocode em um fator
+
+
+```{r}
+df$isocode <- factor(df$isocode)
+```
+
+Agora, vamos agrupar pela varíavel isocode e colocar em um gráfico a evolução temporal do TFP dos três países:
+```{r}
+df %>% group_by(isocode) %>% ggplot(aes(year,rtfpna,color= isocode)) + geom_line()
+```
+
+
+A Principio, nota-se que o  TFP dos Estados Unidos difere dos demais pois apresenta um padrão de crescimento ao longo dos anos.
+Tanto o México quanto o Canadá apresentam uma tendencia de decrescimento do TPF, no entanto, o México apresenta uma maior volatilidade.
+
+
+Uma previsão pode ser feita utilizando a biblioteca "forecast". Para tanto, vamos separar nosso dataframe em subsets:
+
+
+```{r}
+mex <- df %>% filter(isocode=='MEX')# %>% select(-isocode)
+can <- df %>% filter(isocode=='CAN') #%>% select(-isocode)
+usa <- df %>% filter(isocode=='USA') #%>% select(-isocode
+```
+
+
+Para usar a biblioteca do forest, precisamos a principio deixar nossa variável de tempo no formado de time series:
+
+
+```{r}
+x <- ts(mex[,3],start= 1950)
+y <- ts(can[,3],start= 1950)
+z <- ts(usa[,3],start= 1950)
+
+```
+
+Feito isso, podemos agora gerar um modelo para tentar prever os proximos 10 anos:
+
+```{r}
+f.x <- forecast(x, level = c(95), h = 10)
+f.y <- forecast(y, level = c(95), h = 10)
+f.z <- forecast(z, level = c(95), h = 10)
+```
+
+Agora, vamos criar os plots para cada país:
+
+```{r}
+mex.plot <- autoplot(f.x,alpha=0.5,xlab = "Year", ylab ="rtfpna",main="Mexico TFP Projection", colour = T)
+can.plot <- autoplot(f.y,alpha=0.5,xlab = "Year", ylab ="rtfpna",main="Canada TFP Projection", colour = T)
+usa.plot <- autoplot(f.z,alpha=0.5,xlab = "Year", ylab ="rtfpna",main="USA TFP Projection", colour = T)
+```
+
+Por fim, utilizando os gráficos basicos do R, podemos gerar as seguintes visualizações:
+
+```{r}
+#Plotando os gráficos lado a lado para comparação
+par(mfrow= c(1,3))
+plot(f.x, main = 'Mexico  10 Years Forecast',ylim = c(0.5,1.5))
+plot(f.y, main = 'Canada  10 Years Forecast',ylim = c(0.5,1.5))
+plot(f.z, main = 'USA  10 Years Forecast',ylim = c(0.5,1.5))
+```
+
+Como esperado, a projeção para o México possui um spread maior, por conta da alta volatilidade de seu TFP, mantendo a tendência de diminuição.
+
+O Canadá embora também possua uma alta volatilidade, seus extremos não são acentuados como no México. A tendência é de que seu TFP se mantenha.
+
+Os Estados Unidos, como esperado, possui uma projeção  de aumento progressivo.
+
+O fator de produtividade tem correlação com muitas variáveis econômicas que podem ser vistas em https://www.investopedia.com/terms/s/solow-residual.asp.
+
+Portanto, poderiam ter uma visão multivaríavel do problema utilizando "emp" ,"avh",cda", "ck", seriam algumas das variáveis mais óbvias a serem analisadas a princípio.
+
+
+
+
+
+
+
