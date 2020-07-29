@@ -5,7 +5,7 @@ Case para o processo seletivo para a vaga de Data Scientist
 Aqui encontram-se os códigos em R junto com o Rmarkdown, o se preferir, em PDF.
 
 
-Case 1
+# Case 1
 Open the TFP.csv file attached.
 
 The series is composed by TFP (rtfpna variable) at constant national prices (2005 = 1) for three countries: United States (USA), Canada (CAN) and Mexico (MEX).
@@ -19,7 +19,7 @@ Check in the following link pages 2 and 3: https://cran.r-project.org/web/packag
 
 
 
-Case 2
+# Case 2
 
 
 Attached to this test is a .csv file which contains data from Comexstat, which is basically the official data source for brazilian exports e imports, maintened by the government;
